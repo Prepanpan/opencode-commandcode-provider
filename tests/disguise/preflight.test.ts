@@ -135,6 +135,27 @@ describe("请求形状（#9 校准全集）", () => {
     }
   })
 
+  test("ZDR 开启：两个预请求都带 x-cmd-zdr: 1（官方 CLI 解包定案）", async () => {
+    const { deps } = makeDeps({ zdr: true })
+    await runPreflight(deps)
+    const fetchImpl = deps.fetchImpl as FetchLike & { calls: RecordedCall[] }
+    expect(fetchImpl.calls.length).toBe(2)
+    for (const call of fetchImpl.calls) {
+      expect((call.init.headers as Record<string, string>)["x-cmd-zdr"]).toBe("1")
+    }
+  })
+
+  test("ZDR 关闭/缺省：预请求不带 x-cmd-zdr 键", async () => {
+    for (const zdr of [undefined, false]) {
+      const { deps } = makeDeps({ zdr })
+      await runPreflight(deps)
+      const fetchImpl = deps.fetchImpl as FetchLike & { calls: RecordedCall[] }
+      for (const call of fetchImpl.calls) {
+        expect((call.init.headers as Record<string, string>)["x-cmd-zdr"]).toBeUndefined()
+      }
+    }
+  })
+
   test("版本值缺失时省略 x-command-code-version 键（四层兜底皆空的极端场景）", async () => {
     const { deps } = makeDeps({ getVersion: () => Promise.resolve(undefined) })
     await runPreflight(deps)

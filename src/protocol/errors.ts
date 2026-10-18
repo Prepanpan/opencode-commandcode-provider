@@ -1,5 +1,5 @@
 /**
- * 协议核心·错误映射（契约：docs/dev/spec/protocol.md §3 十一行表）。
+ * 协议核心·错误映射（契约：docs/dev/spec/protocol.md §3 十二行表）。
  *
  * 错误对象一律是 AI SDK `APICallError` 形态：透传/合成 statusCode、标注
  * isRetryable（重试由 OpenCode 决定，provider 不自行重试）、message 含
@@ -36,7 +36,7 @@ export interface ApiCallErrorFields {
   cause?: unknown
 }
 
-/** 十一行表错误信封载体：AI SDK APICallError 形态（含跨包识别标记） */
+/** 十二行表错误信封载体：AI SDK APICallError 形态（含跨包识别标记） */
 export class CommandCodeApiCallError extends Error implements ApiCallErrorFields {
   readonly url?: string
   readonly requestBodyValues?: unknown
@@ -66,7 +66,7 @@ export class CommandCodeApiCallError extends Error implements ApiCallErrorFields
   }
 }
 
-/** 十一行表行 7：零输出合成 429（retry-after 10s），防白跑一回合 */
+/** 十二行表行 7：零输出合成 429（retry-after 10s），防白跑一回合 */
 export function zeroOutputError(modelId: string, url: string, requestBodyValues: unknown): CommandCodeApiCallError {
   return new CommandCodeApiCallError({
     code: "ZERO_OUTPUT",
@@ -145,7 +145,7 @@ function clip(text: string, max: number): string {
 }
 
 /**
- * 十一行表行 1–6 的 HTTP 层映射：把非 2xx 响应翻译成 APICallError 形态。
+ * 十二行表行 1–6、12 的 HTTP 层映射：把非 2xx 响应翻译成 APICallError 形态。
  * 401/403 按 body 是否含 MODEL_NOT_IN_PLAN 区分「模型不在套餐」与认证错误；
  * 402 按配额窗口假设合成 retry-after 60s；429 透传上游 retry-after（缺省不合成）；
  * 400 命中上下文超限特征时明确报「上下文窗口超限」；5xx 透传状态码。
@@ -241,6 +241,23 @@ export function apiCallErrorFromHttpResponse(input: {
     })
   }
 
+  // 行 12：422 + ZDR 无可用上游（官方 CLI readErrorCode/readErrorType 同判据：
+  // CMD_ZDR_NO_PROVIDERS / cmd_zdr_no_providers）——指路换模型或关闭开关
+  if (status === 422 && isZdrNoProvidersText(responseBody)) {
+    return new CommandCodeApiCallError({
+      code: "CMD_ZDR_NO_PROVIDERS",
+      message:
+        `[${modelId}] 该模型当前没有可用的零数据保留（ZDR）上游（422 cmd_zdr_no_providers）：` +
+        `请换一个模型，或关闭 ZDR 开关（移除 zdr 配置 / unset COMMANDCODE_ZDR）。上游：${upstream}`,
+      url,
+      requestBodyValues,
+      statusCode: status,
+      responseHeaders: headersRecord,
+      responseBody,
+      isRetryable: false,
+    })
+  }
+
   // 行 6：5xx 透传状态码，可重试
   if (status >= 500) {
     return new CommandCodeApiCallError({
@@ -312,6 +329,15 @@ export function isContextOverflowText(bodyText: string): boolean {
     /max context/i,
   ]
   return patterns.some((pattern) => pattern.test(bodyText))
+}
+
+/**
+ * ZDR 无可用上游特征（422 body 文本判定）：官方 CLI 用 readErrorCode /
+ * readErrorType 检查 `CMD_ZDR_NO_PROVIDERS` 与 `cmd_zdr_no_providers` 两种大小写，
+ * 文本匹配一并覆盖（错误信封的 code/type 字段都在 body 原文里）。
+ */
+export function isZdrNoProvidersText(bodyText: string): boolean {
+  return /cmd_zdr_no_providers/i.test(bodyText)
 }
 
 /** Headers → 小写键 Record（透传进错误对象的 responseHeaders，宿主按小写键读） */

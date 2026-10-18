@@ -18,6 +18,7 @@
 | D7 | 日志脱敏 | key 只以短哈希出现；伪标识符截断；Authorization 永不整串输出 |
 | D8 | 伪装人格 | **如实上报真实机器**：指纹各字段取真机真值，`config.environment` 报真实 platform（#9 校准：真实 CLI 不伪装 Windows，MAXeaglet 的 win32 假人格纯属它的发明） |
 | D9 | config 块取值 | 逐字段照抄官方 CLI 实现（源码调研 #23 定案）：非 git 显式空值九字段齐全、date=UTC、mainBranch=远程 HEAD 推断、structure 单层+黑名单、gitStatus 空/失败→"Working tree clean"；仅两处防御偏离（git 查询 2s 超时、进程级冻结 + 24h 过期重采），均不改线上形状（§9，#19） |
+| D10 | ZDR 开关 | config（v1 `options.zdr` / v2 `settings.zdr`）> env `COMMANDCODE_ZDR=1` > 默认关；config 严格 boolean、env 严格字面量 `"1"`；开启后 generate / 指纹 / lifecycle 统一携带 `x-cmd-zdr: 1`（官方 CLI 1.84.0 解包定案） |
 
 ## 1. 状态模型（D1）
 
@@ -35,7 +36,7 @@
 - 结构照抄 MAXeaglet：指纹记录与 lifecycle 两个预请求**并行**发出（同一 `Promise.all`）。**触发时机（#9 校准）**：真实 CLI 是**每进程启动发一次**（3 次进程启动 = 3 组预请求，均在首个 generate 前 0.3–2.5s 完成），并非 per-key 8–10h 节奏——插件对齐为**插件进程启动时发一次**；长驻进程的 8–10h 惰性补发保留为保守策略（观察窗口无法证伪，见调研 §11.4）。
 - **修一处真 bug**：每个预请求挂**独立 3s 超时**（`AbortSignal.timeout(3000)`）。MAXeaglet 预请求无独立超时，网关挂起时主请求被拖着白等 5 分钟（调研 §8.2）。
 - 超时/失败的主请求**照常放行**（降级语义见 §5）；预请求在后台继续跑完，仅更新状态与日志，不影响本次响应。
-- 预请求头（#9 校准后照抄真实 CLI）：`content-type: application/json`、`User-Agent: cli`、`x-cli-environment: production`、`Authorization: Bearer <key>`、`x-command-code-version`、`accept: */*`、`accept-language: *`、`sec-fetch-mode: cors`、`accept-encoding: br, gzip, deflate`；不带 `x-session-id` / `x-project-slug` / `traceparent` / `x-taste-learning`。
+- 预请求头（#9 校准后照抄真实 CLI）：`content-type: application/json`、`User-Agent: cli`、`x-cli-environment: production`、`Authorization: Bearer <key>`、`x-command-code-version`、`accept: */*`、`accept-language: *`、`sec-fetch-mode: cors`、`accept-encoding: br, gzip, deflate`；**ZDR 开启时追加 `x-cmd-zdr: 1`**（官方 CLI 1.84.0 解包定案：指纹与 lifecycle 均携带）；不带 `x-session-id` / `x-project-slug` / `traceparent` / `x-taste-learning`。
 
 ## 3. 会话身份与 project-slug（D3）
 
@@ -146,7 +147,7 @@
 
 ## 10. 照抄 / 修写 / 不适用 对照表
 
-**照抄（逐字，#9 校准后以调研 §11 为准）**：thumbmark/components 的 15 字段结构与哈希算法（输入换真机真值）；traceparent 生成（`00-<32hex>-<16hex>-01` 逐请求新造，实测吻合）；请求头集合与取值（`x-cli-environment: production`、`x-taste-learning: true`、`User-Agent: cli`、accept 家族，全集见调研 §11.3）；两套 session id 并存（`x-session-id` uuid v4 + lifecycle `sess_<16hex>` 无关随机）；lifecycle 事件类型与 metadata 形状；回退路径会话寿命 12–13h；per-key KeyState 结构。
+**照抄（逐字，#9 校准后以调研 §11 为准）**：thumbmark/components 的 15 字段结构与哈希算法（输入换真机真值）；traceparent 生成（`00-<32hex>-<16hex>-01` 逐请求新造，实测吻合）；请求头集合与取值（`x-cli-environment: production`、`x-taste-learning: true`、`User-Agent: cli`、accept 家族，全集见调研 §11.3）；ZDR 开启时的 `x-cmd-zdr: 1` 头与三请求覆盖面（generate / 指纹 / lifecycle，官方 CLI 1.84.0 解包定案）；两套 session id 并存（`x-session-id` uuid v4 + lifecycle `sess_<16hex>` 无关随机）；lifecycle 事件类型与 metadata 形状；回退路径会话寿命 12–13h；per-key KeyState 结构。
 
 > 注（#25 留档）：`x-taste-learning` 在官方源码为动态值（`tasteLearningEnabled.toString()`：BYOK 模型或用户关闭 learning 时为 `"false"`）；本插件人格（订阅 key、无学习开关）下按官方规则恒 `"true"`，照抄不改。
 

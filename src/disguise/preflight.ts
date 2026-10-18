@@ -4,7 +4,8 @@
  * 修 MAXeaglet 无独立超时被网关挂起拖死主请求的真 bug（调研 §8.2）。
  *
  * 请求头照 #9 抓包校准全集（调研 §11.3）：`User-Agent: cli`、`x-cli-environment:
- * production`、accept 家族等；**不带** `x-session-id` / `x-project-slug` /
+ * production`、accept 家族等；ZDR 开启时追加 `x-cmd-zdr: 1`（官方 CLI 1.84.0
+ * 解包定案）；**不带** `x-session-id` / `x-project-slug` /
  * `traceparent` / `x-taste-learning`（抓包样本 capture/samples/ 证实预请求无此头，
  * 规格 disguise.md §2 同）；`x-co-flag` 真实 CLI 不发送，不存在。
  *
@@ -32,7 +33,11 @@ export const PREFLIGHT_TIMEOUT_MS = 3000
  * 预请求头全集（§2，#9 校准后照抄真实 CLI）。`x-command-code-version` 缺值时
  * 省略该键（四层兜底皆空的极端场景；真实 CLI 恒带）。
  */
-export function buildPreflightHeaders(apiKey: string, ccVersion: string | undefined): Record<string, string> {
+export function buildPreflightHeaders(
+  apiKey: string,
+  ccVersion: string | undefined,
+  zdr = false,
+): Record<string, string> {
   const headers: Record<string, string> = {
     "content-type": "application/json",
     "User-Agent": "cli",
@@ -44,6 +49,8 @@ export function buildPreflightHeaders(apiKey: string, ccVersion: string | undefi
     Authorization: `Bearer ${apiKey}`,
   }
   if (ccVersion !== undefined) headers["x-command-code-version"] = ccVersion
+  // ZDR 头位照官方 buildCommandAuthHeaders（版本头之后）；关闭时整键省略
+  if (zdr) headers["x-cmd-zdr"] = "1"
   return headers
 }
 
@@ -109,6 +116,8 @@ export function summarizePreflightResults(results: readonly PromiseSettledResult
 
 export interface PreflightDeps {
   apiKey: string
+  /** ZDR 开关（开关开启时预请求同样携带 x-cmd-zdr: 1，官方 CLI 解包定案） */
+  zdr?: boolean
   /** 预请求调度状态载体（§5）；结局后经 applyPreflightOutcome 推进并合并回此对象 */
   preflight: PreflightState
   fetchImpl: FetchLike
@@ -154,7 +163,7 @@ async function executeRound(deps: PreflightDeps): Promise<PreflightRound> {
   // 指纹采集（本地）与版本初解析并行就绪后，两请求才并行上线（Promise.allSettled：
   // 等两个都落定再合记结局，不因先失败者提前收场）
   const [fingerprintBody, ccVersion] = await Promise.all([deps.ensureFingerprintBody(), deps.getVersion()])
-  const headers = buildPreflightHeaders(deps.apiKey, ccVersion)
+  const headers = buildPreflightHeaders(deps.apiKey, ccVersion, deps.zdr)
   const results = await Promise.allSettled([
     deps.fetchImpl(FINGERPRINT_ENDPOINT, {
       method: "POST",

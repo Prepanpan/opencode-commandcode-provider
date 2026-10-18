@@ -12,7 +12,7 @@ import {
 } from "../src/protocol/errors.ts"
 import { StreamTruncatedError } from "../src/protocol/ndjson.ts"
 
-// 错误映射十一行表全行（docs/dev/spec/protocol.md §3），关键验收：
+// 错误映射十二行表全行（docs/dev/spec/protocol.md §3），关键验收：
 // - 错误对象一律 AI SDK APICallError 形态——宿主 APICallError.isInstance 能识别
 //   （AI SDK 用 Symbol.for 标记跨副本识别，测试用 devDep @ai-sdk/provider 断言）
 // - message 含 model id 与上游 message；可重试标注全部正确
@@ -213,6 +213,46 @@ describe("行 5：400 + 上下文超限特征 → 明确报「上下文窗口超
     expect(error.statusCode).toBe(400)
     expect(error.isRetryable).toBe(false)
     expect(error.message).toContain("unknown field")
+  })
+})
+
+describe("行 12：422 + cmd_zdr_no_providers → 无 ZDR 上游，不可重试，指路关闭开关", () => {
+  test("body 命中 cmd_zdr_no_providers（type 小写 / code 大写）→ 专属错误", () => {
+    for (const responseBody of [
+      '{"error":{"type":"cmd_zdr_no_providers","message":"no zdr providers available"}}',
+      '{"error":{"code":"CMD_ZDR_NO_PROVIDERS","message":"no zdr providers available"}}',
+    ]) {
+      const error = apiCallErrorFromHttpResponse({
+        modelId: MODEL_ID,
+        url: URL,
+        requestBodyValues: {},
+        status: 422,
+        responseHeaders: headers(),
+        responseBody,
+      })
+      expect(error.code).toBe("CMD_ZDR_NO_PROVIDERS")
+      expect(error.statusCode).toBe(422)
+      expect(error.isRetryable).toBe(false)
+      expect(error.message).toContain(MODEL_ID)
+      expect(error.message).toContain("ZDR")
+      expect(error.message).toContain("COMMANDCODE_ZDR")
+      expect(error.message).toContain("no zdr providers available")
+    }
+  })
+
+  test("普通 422（非 ZDR 特征）→ 按表外 4xx 透传、不可重试", () => {
+    const error = apiCallErrorFromHttpResponse({
+      modelId: MODEL_ID,
+      url: URL,
+      requestBodyValues: {},
+      status: 422,
+      responseHeaders: headers(),
+      responseBody: '{"error":{"message":"unprocessable entity"}}',
+    })
+    expect(error.code).toBeUndefined()
+    expect(error.statusCode).toBe(422)
+    expect(error.isRetryable).toBe(false)
+    expect(error.message).toContain("unprocessable entity")
   })
 })
 

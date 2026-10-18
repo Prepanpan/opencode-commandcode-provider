@@ -44,6 +44,8 @@ export interface DisguiseStateOptions {
   fetch?: FetchLike
   /** 注入式 logger（§7；v1 启动阶段静默 debug，v2 ctx 无 log 域走 console） */
   logger?: DisguiseLogger
+  /** ZDR 开关 getter（预请求发射时读取工厂 seam 最新值）；缺省恒关 */
+  zdr?: () => boolean
   /** config 采集 runtime 接缝（生产 createNodeConfigRuntime()，测试注 fake） */
   configRuntime?: ConfigRuntime
   /** 版本兜底链 ③：模型管线内存中已拉取产物的 sourceCliVersion */
@@ -110,6 +112,8 @@ function collectSessionSeeds(headers: Record<string, string | undefined> | undef
 export function createDisguiseState(options: DisguiseStateOptions = {}): DisguiseState {
   const logger = options.logger ?? consoleLogger()
   const fetchImpl = options.fetch ?? globalThis.fetch
+  // 预请求发射时读取开关最新值（工厂 seam 每次调用重指向）；缺省恒关
+  const zdrEnabled = options.zdr ?? (() => false)
 
   const versionResolver: VersionResolver = createVersionResolver({
     fetch: fetchImpl,
@@ -156,6 +160,7 @@ export function createDisguiseState(options: DisguiseStateOptions = {}): Disguis
     state.preflightInFlight = true
     void runPreflight({
       apiKey,
+      zdr: zdrEnabled(),
       preflight: state.preflight,
       fetchImpl,
       logger,

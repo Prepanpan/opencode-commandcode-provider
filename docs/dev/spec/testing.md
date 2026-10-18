@@ -23,7 +23,7 @@
 - 图片转换：`Uint8Array` / URL → `data:image/<fmt>;base64,...`；未声明 image 的模型收到图片 → 丢弃 + warn（防御路径）。
 - 参数处理：`max_tokens` 三段式 `min(调用方值 ?? 64000, 级联 maxOutput, 200000)`（官方缺省 64e3 复刻、级联值裁剪参考、网关墙，protocol.md §1.2 / ADR 0002）；`tool_choice` 四态映射（`auto`/`none`/`required`→`any`/指定工具）与 tools 非空未指定时显式 `{type:"auto"}`；`reasoning_effort` 仅变体被选中时经 `providerOptions.reasoningEffort` 发送、base 模型不发；越权参数走 AI SDK warnings。
 - NDJSON 严格解析：逐行 `JSON.parse`；空行与 `:` 注释行跳过；半行残片两种结局（已收 `finish-step` 忽略 / 未收并入截断错误）；未知事件静默；usage 双 case 兼容与 `noCacheTokens` 优先规则；finishReason 词表归一（`stop│end_turn`、`tool_calls│tool-calls`、`length│max_tokens│max_output_tokens`）；事件消费清单全事件映射（含 `tool-input-*` 增量必做、`tool-call` 字段名变体兼容）。
-- 错误映射：`protocol.md` §3 **十一行表全行**——含 401/403 的 `MODEL_NOT_IN_PLAN` 与认证错误区分、402 退避拉长、429 透传 retry-after、context 超限识别、5xx 透传、零输出合成 429、截断 STREAM_CLOSED、流中 `error` 不吞、abort 不合成错误、响应前网络错误。
+- 错误映射：`protocol.md` §3 **十二行表全行**——含 401/403 的 `MODEL_NOT_IN_PLAN` 与认证错误区分、402 退避拉长、429 透传 retry-after、context 超限识别、5xx 透传、零输出合成 429、截断 STREAM_CLOSED、流中 `error` 不吞、abort 不合成错误、响应前网络错误、422 无 ZDR 上游。
 - 取消合并形状：`AbortSignal.any(看门狗, 调用方)` 两路信号谁先响都生效。
 
 ### 1.2 伪装模块（契约：`disguise.md`）
@@ -35,7 +35,7 @@
 - 版本头：1.5s 竞速（抢到用新值 / 超时先放行兜底值、查询转后台）、24h 惰性刷新（不挂 `setInterval`、不加抖动）、兜底链（落盘 → 包内快照）、数据源顺序 npm registry → jsDelivr。
 - 退避状态机：成功 `nextInitAt = now + 8h + rand×2h`、`failCount = 0`；瞬时失败 60s × 2^failCount 封顶 15min 且 `failCount++`；4xx 长冷却 8h + rand×2h；主请求永不因预请求受阻。
 - 日志脱敏：apiKey 只以 `cc-key#` + sha256 前 8 位出现；伪标识符截断 12 位 + `…`；Authorization / 完整 key 永不输出。
-- 预请求：指纹 + lifecycle 并行（同一 `Promise.all`）、独立 3s 超时（`AbortSignal.timeout`）、超时/失败照常放行主请求、头集合（#9 校准全集，不带 `x-session-id` / `x-project-slug` / `traceparent`）、lifecycle 事件形状（`sess_<16hex>` 无关随机、`mode: "interactive"` 恒定、`os` 报真实 `platform-arch`）。
+- 预请求：指纹 + lifecycle 并行（同一 `Promise.all`）、独立 3s 超时（`AbortSignal.timeout`）、超时/失败照常放行主请求、头集合（#9 校准全集，不带 `x-session-id` / `x-project-slug` / `traceparent`；ZDR 开启时追加 `x-cmd-zdr: 1`）、lifecycle 事件形状（`sess_<16hex>` 无关随机、`mode: "interactive"` 恒定、`os` 报真实 `platform-arch`）。
 
 ### 1.3 模型管线（契约：`model-pipeline.md`）
 

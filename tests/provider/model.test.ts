@@ -8,6 +8,7 @@ import type { LanguageModelV3CallOptions, LanguageModelV3Prompt, LanguageModelV3
 // 经包入口导入工厂：同时验证「模块第一个 create* 导出」判据在真实入口上成立
 import { createCommandCode } from "../../src/index.ts"
 import { noopLogger } from "../../src/disguise/logger.ts"
+import type { CommandCodeFactoryOptions } from "../../src/provider/model.ts"
 import type { CommandCodeApiCallError } from "../../src/protocol/errors.ts"
 import { GENERATE_ENDPOINT } from "../../src/protocol/generate.ts"
 import type { FetchLike } from "../../src/protocol/json.ts"
@@ -78,7 +79,7 @@ function makeFetch(options: { generate?: (call: CapturedCall) => Response | Prom
 
 const generateCalls = (calls: readonly CapturedCall[]): CapturedCall[] => calls.filter((call) => call.url === GENERATE_ENDPOINT)
 
-function makeFactory(fetchImpl: FetchLike) {
+function makeFactory(fetchImpl: FetchLike, overrides: Partial<CommandCodeFactoryOptions> = {}) {
   return createCommandCode({
     name: "commandcode-go",
     apiKey: API_KEY,
@@ -86,6 +87,9 @@ function makeFactory(fetchImpl: FetchLike) {
     fetch: fetchImpl,
     modelsUrls: [ARTIFACT_URL],
     logger: noopLogger,
+    // 显式关闭：测试不依赖真实 COMMANDCODE_ZDR 环境变量（testing.md §5 纪律）
+    zdr: false,
+    ...overrides,
   })
 }
 
@@ -331,6 +335,39 @@ describe("信封与伪装头主路径", () => {
     expect(bodies[3].params.reasoning_effort).toBeUndefined()
   })
 
+  test("ZDR 开关：config 开启时主请求带 x-cmd-zdr: 1；缺省不带", async () => {
+    const off = makeFetch()
+    const offModel = makeFactory(off.fetch).languageModel(PREFIXED_REFERENCE)
+    await collectStream((await offModel.doStream(callOptions())).stream)
+    expect((generateCalls(off.calls)[0]!.init?.headers as Record<string, string>)["x-cmd-zdr"]).toBeUndefined()
+
+    const on = makeFetch()
+    const onModel = makeFactory(on.fetch, { zdr: true }).languageModel(PREFIXED_REFERENCE)
+    await collectStream((await onModel.doStream(callOptions())).stream)
+    expect((generateCalls(on.calls)[0]!.init?.headers as Record<string, string>)["x-cmd-zdr"]).toBe("1")
+  })
+
+  test("ZDR 头完全由伪装层拥有：开启注入；关闭时用户同名头（任意大小写）被剔除", async () => {
+    const override = makeFetch()
+    const overrideModel = makeFactory(override.fetch, {
+      headers: { "x-cmd-zdr": "0", "X-Cmd-Zdr": "1" },
+      zdr: true,
+    }).languageModel(PREFIXED_REFERENCE)
+    await collectStream((await overrideModel.doStream(callOptions())).stream)
+    const overrideHeaders = generateCalls(override.calls)[0]!.init?.headers as Record<string, string>
+    expect(overrideHeaders["x-cmd-zdr"]).toBe("1")
+    expect(Object.keys(overrideHeaders).filter((key) => key.toLowerCase() === "x-cmd-zdr")).toEqual(["x-cmd-zdr"])
+
+    const off = makeFetch()
+    const offModel = makeFactory(off.fetch, {
+      headers: { "x-cmd-zdr": "1", "X-Cmd-Zdr": "1" },
+      zdr: false,
+    }).languageModel(PREFIXED_REFERENCE)
+    await collectStream((await offModel.doStream(callOptions())).stream)
+    const offHeaders = generateCalls(off.calls)[0]!.init?.headers as Record<string, string>
+    expect(Object.keys(offHeaders).filter((key) => key.toLowerCase() === "x-cmd-zdr")).toEqual([])
+  })
+
   test("未注册模型的防御路径：max_tokens 兜调用方值，缺省兜 32000", async () => {
     const { fetch, calls } = makeFetch()
     const model = makeFactory(fetch).languageModel("never-registered")
@@ -397,7 +434,7 @@ describe("abort 与错误链路端到端", () => {
     expect((thrown as Error).name).toBe("AbortError")
   })
 
-  test("HTTP 层错误映射端到端（十一行表行 1/2/4/5/6 抽样）", async () => {
+  test("HTTP 层错误映射端到端（错误映射表行 1/2/4/5/6 抽样）", async () => {
     const scenarios: Array<{
       name: string
       status: number

@@ -17,6 +17,10 @@ _Avoid_: 免费档、API plan
 **Provider API**:
 Command Code 的标准 OpenAI 兼容端点（`/provider/v1/*`）。Go plan 调用返回 403 upgrade_required。
 
+**ZDR（零数据保留）**:
+Command Code 的隐私开关：开启后请求只路由到不保留数据的上游；所选模型无 ZDR 上游时返回 422 `cmd_zdr_no_providers` 而非回退到保留数据的上游。上游透传定价，单价通常高于常规请求。插件复刻官方 CLI 的线上行为（generate / 指纹 / lifecycle 携带 `x-cmd-zdr: 1`），开关通道为 config（v1 `options.zdr` / v2 `settings.zdr`）> 环境变量 `COMMANDCODE_ZDR=1` > 默认关。
+_Avoid_: 隐私模式、零日志模式、CMD_ZDR（那是官方 CLI 的变量，插件不继承）
+
 ### 协议
 
 **`/alpha/generate`**:

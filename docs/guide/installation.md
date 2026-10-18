@@ -134,6 +134,16 @@
 
 与安装无关的已知问题（如模型额度消耗异常）见[已知问题](known-issues.md)。
 
+## ZDR（零数据保留，可选）
+
+默认关闭。需要时在全局配置中开启：
+
+- OpenCode 2：`providers.commandcode-go.settings.zdr: true`
+- 环境变量：`COMMANDCODE_ZDR=1`
+- V1：`provider.commandcode-go.options.zdr: true`
+
+ZDR 请求只路由零数据保留上游，单价通常更高；所选模型无可用上游时请求直接失败（422 `cmd_zdr_no_providers`），不会回退。详见 [README 的 ZDR 一节](../../README.md)。
+
 ## 卸载
 
 从全局配置 `plugins` 数组中删除 `"@wallbreakerno4/opencode-commandcode"`，或执行：

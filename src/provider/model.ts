@@ -44,6 +44,7 @@ import type {
 import { PERMISSION_MODE } from "../disguise/config-block.js"
 import { buildGenerateHeaders } from "../disguise/headers.js"
 import { consoleLogger, consoleWarnLogger, isV1SilentModeEnabled, type DisguiseLogger } from "../disguise/logger.js"
+import { resolveZdr, ZDR_ENV_VAR } from "../disguise/zdr.js"
 import { V1_PROVIDER_LOGGER_MARKER } from "../host/constants.js"
 import { createDisguiseState, type DisguiseState } from "../disguise/state.js"
 import { parseArtifact, type Artifact } from "../models/artifact.js"
@@ -77,6 +78,13 @@ export interface CommandCodeFactoryOptions {
    */
   readonly modelsUrls?: unknown
   /**
+   * ZDR（零数据保留）开关原样值（disguise.md §2）：v1 `options.zdr` / v2
+   * `settings.zdr` 经宿主透传后在工厂 options 中以顶层键出现。严格 boolean；
+   * 每次工厂调用重解析并重指向 seam（宿主按 settings 缓存实例，配置变化自然
+   * 触发重建）。未写时由 `COMMANDCODE_ZDR=1` 兜底。
+   */
+  readonly zdr?: unknown
+  /**
    * 注入式 logger（disguise.md §7 官方接缝；通道结论以 logger.ts 头注为准）。
    * 每次工厂调用重指向最新注入值。
    */
@@ -93,11 +101,12 @@ export interface CommandCodeProvider {
 // 模块级运行时单例（跨工厂调用共享；见文件头「运行时共享」）
 // ---------------------------------------------------------------------------
 
-/** 每次工厂调用重指向的注入接缝（宿主 fetch / provider 级头 / logger） */
+/** 每次工厂调用重指向的注入接缝（宿主 fetch / provider 级头 / logger / ZDR 开关） */
 interface ProviderSeam {
   fetch: FetchLike
   headers: Record<string, string>
   logger: DisguiseLogger
+  zdr: boolean
 }
 
 interface ProviderRuntime {
@@ -155,6 +164,7 @@ function getRuntime(init: RuntimeInit, startup: "start" | "defer" = "start"): Pr
     fetch: init.fetch ?? globalThis.fetch,
     headers: init.headers ?? {},
     logger: init.logger ?? consoleLogger(),
+    zdr: false,
   }
   // 稳定出网跳板：伪装状态与管线构造时捕获本函数，全部出网路径（预请求 / models /
   // 产物 / 版本查询 / 图片下载 / generate）经它逐次转发到 seam.fetch 最新注入值
@@ -167,6 +177,8 @@ function getRuntime(init: RuntimeInit, startup: "start" | "defer" = "start"): Pr
   const state = createDisguiseState({
     fetch: trampoline,
     logger: trampolineLogger,
+    // ZDR 开关：预请求发射时读取 seam 最新值（工厂每次调用重指向）
+    zdr: () => seam.zdr,
     // 版本头兜底链 ③/④ 接线（disguise.md §6）：产物层读管线内存（getter 调用时
     // 单例必已赋值），快照层读本包快照
     artifactSourceCliVersion: () => runtime?.pipeline.artifactSourceCliVersion(),
@@ -250,6 +262,8 @@ export function createCommandCode(options: CommandCodeFactoryOptions): CommandCo
   rt.seam.fetch = options.fetch ?? globalThis.fetch
   rt.seam.headers = options.headers ?? {}
   if (logger !== undefined) rt.seam.logger = logger
+  // ZDR 开关解析（config > env > 默认关；disguise.md §2）：config 非法值 warn + 按关
+  rt.seam.zdr = resolveZdr({ config: options.zdr, env: process.env[ZDR_ENV_VAR], logger: rt.seam.logger })
   // modelsUrls config 通道接驳（model-pipeline.md §1.3）：v2 宿主把 settings.modelsUrls
   // 合并进工厂 options（首次工厂调用前插件侧不可见——管线构造时按 env/默认列表启动，
   // 这里每次工厂调用重绑定，原值不变零开销）；v1 宿主的 options.modelsUrls 已由 glue 的
@@ -292,6 +306,18 @@ function fallbackMaxOutput(logger: DisguiseLogger, wireId: string, callerValue: 
       `，按调用方值处理${callerValue === undefined ? `，缺省兜 ${FALLBACK_MAX_OUTPUT}` : ""}`,
   )
   return callerValue ?? FALLBACK_MAX_OUTPUT
+}
+
+/**
+ * ZDR 头完全由伪装层拥有（官方 CLI 无用户头通道）：用户显式配置的同名头
+ * （任意大小写）一律剔除，避免「主请求带、预请求不带」的不一致状态。
+ */
+function stripZdrHeader(headers: Record<string, string>): Record<string, string> {
+  const filtered: Record<string, string> = {}
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() !== "x-cmd-zdr") filtered[key] = value
+  }
+  return filtered
 }
 
 /**
@@ -342,10 +368,17 @@ async function* callIterator(
     },
   )
 
-  // 伪装头组装；用户显式配置头垫底（被伪装键覆盖防冲突）；调用 headers 不透传
+  // 伪装头组装；用户显式配置头垫底（被伪装键覆盖防冲突；ZDR 头整键由伪装层拥有）；调用 headers 不透传
   const headers = {
-    ...rt.seam.headers,
-    ...buildGenerateHeaders({ apiKey, ccVersion, sessionId, workingDir: configBlock.workingDir, traceparent }),
+    ...stripZdrHeader(rt.seam.headers),
+    ...buildGenerateHeaders({
+      apiKey,
+      ccVersion,
+      sessionId,
+      workingDir: configBlock.workingDir,
+      traceparent,
+      zdr: rt.seam.zdr,
+    }),
   }
 
   yield* generateStream({

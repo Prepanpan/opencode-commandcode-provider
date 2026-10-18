@@ -202,6 +202,29 @@ describe("回退路径（per-key 随机 uuid 12h + 0~1h 惰性轮换）", () => 
 })
 
 describe("门面调度：预请求幂等与主请求时序（D2/D5）", () => {
+  test("ZDR 开关 getter：预请求发射时读取最新值（开 → 带 x-cmd-zdr: 1）", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    const fetchImpl = ((url: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: String(url), init })
+      return Promise.resolve(new Response("{}", { status: 200 }))
+    }) as FetchLike
+    let zdr = false
+    const state = createDisguiseState({
+      fetch: fetchImpl,
+      logger: collectingLogger(),
+      configRuntime: minimalRuntime(),
+      zdr: () => zdr,
+    })
+    zdr = true
+    state.startPreflight(KEY_A)
+    await waitFor(() => calls.filter((call) => call.url === FINGERPRINT_ENDPOINT || call.url === LIFECYCLE_ENDPOINT).length >= 2)
+    const preflightCalls = calls.filter((call) => call.url === FINGERPRINT_ENDPOINT || call.url === LIFECYCLE_ENDPOINT)
+    expect(preflightCalls.length).toBe(2)
+    for (const call of preflightCalls) {
+      expect((call.init?.headers as Record<string, string>)["x-cmd-zdr"]).toBe("1")
+    }
+  })
+
   test("startPreflight 幂等：每进程每 key 至多一轮（指纹+lifecycle 各一）", async () => {
     const fetchImpl = okFetch()
     const state = createDisguiseState({ fetch: fetchImpl, logger: collectingLogger(), configRuntime: minimalRuntime() })

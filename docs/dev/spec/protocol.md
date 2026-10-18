@@ -83,6 +83,7 @@ OpenCode ◀─stream part── 协议核心 ◀─NDJSON 事件── 上游�
 | 9 | `error` 事件（流中） | error stream part（附上游 message + model id），已收 delta 保留；**不吞错**——吞了用户会看到「正常结束但啥也没发生」 | 交 OpenCode |
 | 10 | 客户端断连（abort） | 传播 abort 到上游 fetch，**不合成错误**（调用方自己取消的） | — |
 | 11 | 响应前网络错误（DNS / 连接拒绝 / TLS） | 网络错误 | 是 |
+| 12 | 422 + body 含 `cmd_zdr_no_providers`（官方 CLI 判据：`CMD_ZDR_NO_PROVIDERS` / `cmd_zdr_no_providers`） | ZDR 无可用上游：明确提示换模型或关闭 ZDR 开关（`zdr` 配置 / `COMMANDCODE_ZDR`），不回退到保留数据的上游 | 否 |
 
 ## 4. 超时与取消
 
