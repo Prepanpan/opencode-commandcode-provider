@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-17T04:48:23.594Z",
-  "sourceCliVersion": "1.54.2",
+  "generatedAt": "2026-10-15T00:06:15.451Z",
+  "sourceCliVersion": "1.82.2",
   "models": [
     {
       "id": "deepseek/deepseek-v4-pro",
@@ -11,11 +11,12 @@
         "text"
       ],
       "efforts": [
+        "off",
         "high",
         "max"
       ],
       "context": 1000000,
-      "maxOutput": 384000
+      "maxOutput": 393216
     },
     {
       "id": "deepseek/deepseek-v4-flash",
@@ -25,11 +26,12 @@
         "text"
       ],
       "efforts": [
+        "off",
         "high",
         "max"
       ],
       "context": 1000000,
-      "maxOutput": 384000
+      "maxOutput": 393216
     },
     {
       "id": "deepseek/deepseek-v4-flash-vision-exp",
@@ -40,11 +42,12 @@
         "image"
       ],
       "efforts": [
+        "off",
         "high",
         "max"
       ],
       "context": 1000000,
-      "maxOutput": 384000
+      "maxOutput": 393216
     },
     {
       "id": "deepseek/deepseek-v4-flash-fast",
@@ -70,12 +73,30 @@
         "image"
       ],
       "efforts": [
+        "off",
         "low",
         "high",
         "max"
       ],
       "context": 1000000,
       "maxOutput": 384000
+    },
+    {
+      "id": "deepseek/deepseek-v4.1-flash-fast",
+      "name": "DeepSeek V4.1 Flash Fast",
+      "reasoning": true,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "efforts": [
+        "off",
+        "low",
+        "high",
+        "max"
+      ],
+      "context": 1000000,
+      "maxOutput": 32768
     },
     {
       "id": "moonshotai/Kimi-K3",
@@ -91,7 +112,7 @@
         "max"
       ],
       "context": 1000000,
-      "maxOutput": 131072
+      "maxOutput": 1048576
     },
     {
       "id": "moonshotai/Kimi-K2.7-Code",
@@ -135,7 +156,7 @@
         "image"
       ],
       "context": 256000,
-      "maxOutput": 256000
+      "maxOutput": 32768
     },
     {
       "id": "z-ai/glm-5.3-flash",
@@ -151,6 +172,22 @@
         "max"
       ],
       "context": 1048576,
+      "maxOutput": 131072
+    },
+    {
+      "id": "z-ai/glm-5.3-flashx",
+      "name": "GLM-5.3 FlashX",
+      "reasoning": true,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "efforts": [
+        "low",
+        "high",
+        "max"
+      ],
+      "context": 1000000,
       "maxOutput": 131072
     },
     {
@@ -190,7 +227,7 @@
         "text"
       ],
       "context": 1000000,
-      "maxOutput": 131072
+      "maxOutput": 262144
     },
     {
       "id": "zai-org/GLM-5.1",
@@ -249,6 +286,28 @@
       "maxOutput": 131072
     },
     {
+      "id": "xiaomi/mimo-v2.6-pro",
+      "name": "MiMo V2.6 Pro",
+      "reasoning": false,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "context": 1048576,
+      "maxOutput": 131072
+    },
+    {
+      "id": "xiaomi/mimo-v2.6-flash",
+      "name": "MiMo V2.6 Flash",
+      "reasoning": false,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "context": 1048576,
+      "maxOutput": 131072
+    },
+    {
       "id": "xiaomi/mimo-v2.5-pro",
       "name": "MiMo V2.5 Pro",
       "reasoning": false,
@@ -265,6 +324,22 @@
       "inputModalities": [
         "text",
         "image"
+      ],
+      "context": 1000000,
+      "maxOutput": 131072
+    },
+    {
+      "id": "Qwen/Qwen3.8-Omni-Flash",
+      "name": "Qwen 3.8 Omni Flash",
+      "reasoning": true,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "xhigh"
       ],
       "context": 1000000,
       "maxOutput": 131072
@@ -387,14 +462,30 @@
       "maxOutput": 32768
     },
     {
-      "id": "meituan/LongCat-2.0:free",
+      "id": "meituan/LongCat-2.0",
       "name": "LongCat 2.0",
       "reasoning": true,
       "inputModalities": [
         "text"
       ],
       "context": 1048576,
-      "maxOutput": 32000
+      "maxOutput": 131072
+    },
+    {
+      "id": "stepfun/Step-5-Preview",
+      "name": "Step 5 Preview",
+      "reasoning": true,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "context": 1000000,
+      "maxOutput": 65536
     },
     {
       "id": "stepfun/Step-3.7-Flash",
@@ -414,7 +505,7 @@
       "inputModalities": [
         "text"
       ],
-      "context": 1000000,
+      "context": 262144,
       "maxOutput": 256000
     },
     {
@@ -472,7 +563,7 @@
         "image"
       ],
       "context": 1000000,
-      "maxOutput": 32768
+      "maxOutput": 1048576
     },
     {
       "id": "poolside/laguna-s-2.1-free",
@@ -493,6 +584,71 @@
       ],
       "context": 262144,
       "maxOutput": 32768
+    },
+    {
+      "id": "inclusionai/ling-3.1-flash",
+      "name": "Ling 3.1 Flash",
+      "reasoning": true,
+      "inputModalities": [
+        "text"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "context": 262144,
+      "maxOutput": 32768
+    },
+    {
+      "id": "mistral/mistral-large-4",
+      "name": "Mistral Large 4",
+      "reasoning": true,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "context": 524288,
+      "maxOutput": 262144
+    },
+    {
+      "id": "stealth/glyph-cluster:free",
+      "name": "Glyph Cluster",
+      "reasoning": true,
+      "inputModalities": [
+        "text"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "context": 256000,
+      "maxOutput": 256000
+    },
+    {
+      "id": "gpt-6-luna",
+      "name": "GPT-6 Luna",
+      "reasoning": true,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "context": 1050000,
+      "maxOutput": 128000
     },
     {
       "id": "gpt-5.6-luna",
