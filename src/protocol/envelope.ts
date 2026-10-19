@@ -103,6 +103,9 @@ export interface EnvelopeCallContext {
   maxOutput: number
   /** 与 `x-session-id` 同值（伪装模块会话身份） */
   threadId: string
+  /** 档位兜底（Kilo CLI 通道）：宿主把选中 variant 的 `body` 合并进工厂 options，
+   * 由工厂转写至此；`options.providerOptions` 通道（OpenCode 2 / v1）优先于它 */
+  reasoningEffort?: string
   /** 伪装模块提供的填充点内容，本模块零知识 */
   disguise: {
     config: Record<string, unknown>
@@ -124,7 +127,7 @@ export function buildEnvelope(
   const { system, messages } = convertPrompt(options.prompt, warnings)
   const tools = convertTools(options.tools, warnings)
   const toolChoice = resolveToolChoice(options.toolChoice, tools !== undefined)
-  const reasoningEffort = resolveReasoningEffort(options.providerOptions)
+  const reasoningEffort = resolveReasoningEffort(options.providerOptions) ?? context.reasoningEffort
 
   const params: EnvelopeParams = {
     model: context.modelId,
@@ -190,10 +193,12 @@ function resolveToolChoice(
   return hasTools ? { type: "auto" } : undefined
 }
 
-/** `reasoning_effort` 仅变体被选中时发送；接收通道为 `providerOptions.reasoningEffort`
- * ——OpenCode 把 variant 档位合并进 providerOptions 传入 LanguageModel（协议唯一路径）。
- * 命名空间键随宿主而异（本插件为 commandcode-go，官方 CLI 抓包里出现过 deepseek /
- * openaiCompatible 等），故按确定性优先序全命名空间扫描。 */
+/** `reasoning_effort` 仅变体被选中时发送；主接收通道为
+ * `providerOptions.reasoningEffort`——OpenCode 把 variant 档位合并进 providerOptions
+ * 传入 LanguageModel。命名空间键随宿主而异（本插件为 commandcode-go，官方 CLI 抓包里
+ * 出现过 deepseek / openaiCompatible 等），故按确定性优先序全命名空间扫描。
+ * Kilo CLI 无 variant.settings 键，档位经 variant.body → 工厂 options 抵达，由
+ * `context.reasoningEffort` 兜底（优先级低于 providerOptions 通道）。 */
 function resolveReasoningEffort(providerOptions: SharedV3ProviderOptions | undefined): string | undefined {
   if (providerOptions === undefined) return undefined
   const namespaces = Object.keys(providerOptions).sort((a, b) => {

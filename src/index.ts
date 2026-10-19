@@ -2,8 +2,9 @@
  * @wallbreakerno4/opencode-commandcode 的入口骨架：单包三导出，v1/v2 双宿主共用。
  *
  * 形状即契约（防回归断言见 tests/package-shape.test.ts）：
- * - default `{ id, setup, server }`——v2 宿主读 `id` + `setup`（接线实现在
- *   src/host/v2.ts，#36）；v1 宿主加载器在 default 带 `id` 时要求 `server` 也在场，
+ * - default `{ id, setup, server }`——v2 类宿主读 `id` + `setup`（接线实现在
+ *   src/host/v2.ts，#36；Kilo CLI 的 catalog 域接线见 src/host/kilo.ts，两者的判别
+ *   收口在 src/host/dispatch.ts）；v1 宿主加载器在 default 带 `id` 时要求 `server` 也在场，
  *   缺 `server` 则整模块跳过并忽略全部命名导出（#11 真机实测），三键缺一不可。
  *   v1 宿主是双轨形态：v1 加载器调 `server()`，内嵌 v2 运行时也调 `setup()`——
  *   两条路共用同一模块实例与运行时单例，模式由先到者协商（接线实现 src/host/v1.ts，
@@ -16,8 +17,8 @@
  * `@opencode/plugin`；v2 的 define() 是恒等函数），避免被宿主 API 漂移绑架。
  */
 
+import { setup } from "./host/dispatch.js"
 import { serverV1 } from "./host/v1.js"
-import { setupV2 } from "./host/v2.js"
 import type { V1Hooks } from "./host/v1.js"
 
 /**
@@ -36,7 +37,8 @@ export const ENTRY_URL: string = import.meta.url
  */
 export interface CommandCodePlugin {
   readonly id: "commandcode-go"
-  /** v2 插件入口：OpenCode 2 `setup(ctx)`（#36 宿主接线；v1 宿主的内嵌 v2 运行时同样调用） */
+  /** 插件入口：按 ctx 域集分派到宿主接线（OpenCode 2.0.4+ → host/v2.ts；Kilo CLI 7.8.x →
+   *  host/kilo.ts；host/dispatch.ts 收口判别） */
   readonly setup: (context: unknown) => Promise<void> | void
   /** v1 插件入口：`server(input, options)` → hooks（options 为插件级配置，#37 宿主接线） */
   readonly server: (input: unknown, options: unknown) => Promise<V1Hooks>
@@ -46,6 +48,6 @@ export { createCommandCode, type CommandCodeFactoryOptions, type CommandCodeProv
 
 export default {
   id: "commandcode-go",
-  setup: setupV2,
+  setup: setup,
   server: serverV1,
 } satisfies CommandCodePlugin

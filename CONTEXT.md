@@ -137,6 +137,10 @@ _Avoid_: known bugs、故障排查（那是安装指南里排除安装故障的�
 agent 用 `opencode --version` 判定宿主版本的规则：输出匹配 `v?2.0.4` 或更高即 V2 支持面（provider/model 域世代）、匹配 `v2.0.0`–`v2.0.3` 为需先升级的旧 V2、匹配 `1.x` 即 V1；命令缺失即非 OpenCode 环境（直接拒绝）；版本无法识别时停下询问，不猜。V1/V2 已不再并存安装，无「双宿主并存」分支。
 _Avoid_: 版本探测、环境探测、命令名判别
 
+**Kilo 宿主面**:
+Kilo CLI（OpenCode 2 代码基的分支）的支持面：插件 ctx 只有 catalog 域，没有 provider 域，故接线为 `src/host/kilo.ts`，与 v1 / OpenCode 2 并列为第三个接线；入口判别收口在 `src/host/dispatch.ts`。Kilo 的 provider `package` 走 `file://` 原样 import，**不剥 `aisdk:` 前缀**——自指注册写入口 URL 原样。决策：`docs/dev/adr/0005-kilo-cli-host.md`。
+_Avoid_: kilo 兼容层、fork 适配
+
 **V1 冻结**:
 v1 支持面的维护政策：v1 专属面（`src/host/v1.ts`、v1 专属测试与文档）停止新特性、只修致命问题（崩溃 / 认证不可用 / 伪装与会话状态错乱 / 安全）；上游 V1 停更 / EOL 后停止维护，代码与冻结版文档保留、不主动移除。决策：`docs/dev/adr/0004-v1-freeze-and-retention.md`。
 _Avoid_: v1 弃用、v1 退役、v1 移除

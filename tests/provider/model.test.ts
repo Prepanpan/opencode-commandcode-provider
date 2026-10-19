@@ -368,6 +368,32 @@ describe("信封与伪装头主路径", () => {
     expect(Object.keys(offHeaders).filter((key) => key.toLowerCase() === "x-cmd-zdr")).toEqual([])
   })
 
+  test("Kilo CLI 档位通道：工厂选项 reasoningEffort 进信封，providerOptions 通道优先", async () => {
+    const { fetch, calls } = makeFetch()
+    // Kilo 把选中 variant 的 body 合并进工厂 options，档位即以顶层 reasoningEffort 进来
+    const variantModel = createCommandCode({
+      name: "commandcode-go",
+      apiKey: API_KEY,
+      fetch,
+      modelsUrls: [ARTIFACT_URL],
+      logger: noopLogger,
+      reasoningEffort: "high",
+    }).languageModel(PREFIXED_REFERENCE)
+    await collectStream((await variantModel.doStream(callOptions())).stream)
+    // 调用级 providerOptions 同时给出 → 优先档位按调用级
+    await collectStream(
+      (await variantModel.doStream(callOptions({ providerOptions: { "commandcode-go": { reasoningEffort: "low" } } })))
+        .stream,
+    )
+    // 无档位的工厂（base 模型）→ 不发 reasoning_effort
+    await collectStream((await makeFactory(fetch).languageModel(PREFIXED_REFERENCE).doStream(callOptions())).stream)
+
+    const bodies = generateCalls(calls).map((call) => JSON.parse(String(call.init?.body)))
+    expect(bodies[0].params.reasoning_effort).toBe("high")
+    expect(bodies[1].params.reasoning_effort).toBe("low")
+    expect(bodies[2].params.reasoning_effort).toBeUndefined()
+  })
+
   test("未注册模型的防御路径：max_tokens 兜调用方值，缺省兜 32000", async () => {
     const { fetch, calls } = makeFetch()
     const model = makeFactory(fetch).languageModel("never-registered")

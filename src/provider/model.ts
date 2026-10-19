@@ -85,6 +85,12 @@ export interface CommandCodeFactoryOptions {
    */
   readonly zdr?: unknown
   /**
+   * 档位键（Kilo CLI 通道）：宿主把选中 variant 的 `body` 合并进工厂 options，
+   * 档位即以顶层 `reasoningEffort` 出现。缺省时以调用级
+   * `providerOptions[ns].reasoningEffort` 为准（OpenCode 2 / v1 通道）。
+   */
+  readonly reasoningEffort?: string
+  /**
    * 注入式 logger（disguise.md §7 官方接缝；通道结论以 logger.ts 头注为准）。
    * 每次工厂调用重指向最新注入值。
    */
@@ -270,6 +276,9 @@ export function createCommandCode(options: CommandCodeFactoryOptions): CommandCo
   // config hook 在构造时应用，管线在 v1 形态下忽略重绑定（无后台刷新，无需补拉）
   if (options.modelsUrls !== undefined) rt.pipeline.rebindModelsUrls(options.modelsUrls)
   const apiKey = options.apiKey ?? ""
+  // 档位兜底（Kilo CLI 通道）：宿主按选中 variant 逐次构造工厂，档位随 options 进来；
+  // 缺省/非字符串时落 undefined，由 buildEnvelope 走 providerOptions 通道
+  const variantEffort = typeof options.reasoningEffort === "string" ? options.reasoningEffort : undefined
   return {
     languageModel(modelID: string): LanguageModelV3 {
       return {
@@ -277,8 +286,8 @@ export function createCommandCode(options: CommandCodeFactoryOptions): CommandCo
         provider: PROVIDER_ID,
         modelId: modelID,
         supportedUrls: {},
-        doStream: (callOptions) => doStream(rt, apiKey, modelID, callOptions),
-        doGenerate: (callOptions) => doGenerate(rt, apiKey, modelID, callOptions),
+        doStream: (callOptions) => doStream(rt, apiKey, modelID, variantEffort, callOptions),
+        doGenerate: (callOptions) => doGenerate(rt, apiKey, modelID, variantEffort, callOptions),
       }
     },
   }
@@ -328,6 +337,7 @@ async function* callIterator(
   rt: ProviderRuntime,
   apiKey: string,
   modelID: string,
+  variantEffort: string | undefined,
   options: LanguageModelV3CallOptions,
 ): AsyncGenerator<LanguageModelV3StreamPart> {
   const wireId = resolveWireId(modelID)
@@ -363,6 +373,7 @@ async function* callIterator(
       modelId: wireId,
       maxOutput,
       threadId: sessionId,
+      reasoningEffort: variantEffort,
       // ConfigBlock → 信封填充点的零知识搬运：接口无索引签名，结构上仅此一处适配
       disguise: { config: configBlock as unknown as Record<string, unknown>, permissionMode: PERMISSION_MODE },
     },
@@ -397,9 +408,10 @@ async function doStream(
   rt: ProviderRuntime,
   apiKey: string,
   modelID: string,
+  variantEffort: string | undefined,
   options: LanguageModelV3CallOptions,
 ): Promise<LanguageModelV3StreamResult> {
-  const iterator = callIterator(rt, apiKey, modelID, options)
+  const iterator = callIterator(rt, apiKey, modelID, variantEffort, options)
   const first = await iterator.next()
   let pending: LanguageModelV3StreamPart | undefined = first.done ? undefined : first.value
 
@@ -432,9 +444,10 @@ async function doGenerate(
   rt: ProviderRuntime,
   apiKey: string,
   modelID: string,
+  variantEffort: string | undefined,
   options: LanguageModelV3CallOptions,
 ): Promise<LanguageModelV3GenerateResult> {
-  const iterator = callIterator(rt, apiKey, modelID, options)
+  const iterator = callIterator(rt, apiKey, modelID, variantEffort, options)
   const content: LanguageModelV3Content[] = []
   const warnings: SharedV3Warning[] = []
   /** 进行中的块（id → 块对象；对象引用已入 content，追加即聚合） */

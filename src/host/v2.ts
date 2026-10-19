@@ -38,7 +38,8 @@ import { toV2ModelFields } from "../models/mapping.js"
 import type { V2ModelFields } from "../models/mapping.js"
 import { PROVIDER_ID } from "../protocol/envelope.js"
 import { ensureProviderRuntime, latestCascade } from "../provider/model.js"
-import { API_KEY_ENV_VAR, API_KEY_METHOD_LABEL, PROVIDER_DISPLAY_NAME } from "./constants.js"
+import { registerIntegrationAuth, type IntegrationDomain } from "./integration.js"
+import { PROVIDER_DISPLAY_NAME } from "./constants.js"
 
 // ---------------------------------------------------------------------------
 // 宿主 ctx 最小结构类型（零依赖承接；形状出处：@opencode/plugin@2.0.4+ SDK 类型）
@@ -79,24 +80,6 @@ interface ProviderEditor {
 interface ProviderDomain {
   readonly transform: (callback: (editor: ProviderEditor) => void) => Promise<unknown>
   readonly reload: () => Promise<void>
-}
-
-type IntegrationMethodRegistration = {
-  readonly integrationID: string
-  readonly method:
-    | { readonly type: "key"; readonly label?: string }
-    | { readonly type: "env"; readonly names: readonly string[] }
-}
-
-interface IntegrationDraft {
-  readonly update: (id: string, update: (integration: { name: string }) => void) => void
-  readonly method: {
-    readonly update: (input: IntegrationMethodRegistration) => void
-  }
-}
-
-interface IntegrationDomain {
-  readonly transform: (callback: (draft: IntegrationDraft) => void) => Promise<unknown>
 }
 
 interface V2PluginContext {
@@ -170,20 +153,9 @@ export async function setupV2(context: unknown): Promise<void> {
 
   // 认证方法（#12 S2 定案）：integration.update 为全新 provider upsert；key 方法
   // 带 /connect 输入框 label，env 方法声明环境变量；integrationID 与 providerID
-  // 同名——凭证解析终点是工厂 options.apiKey，优先级 credential > env 由宿主保证
-  await ctx.integration.transform((draft) => {
-    draft.update(PROVIDER_ID, (integration) => {
-      integration.name = PROVIDER_DISPLAY_NAME
-    })
-    draft.method.update({
-      integrationID: PROVIDER_ID,
-      method: { type: "key", label: API_KEY_METHOD_LABEL },
-    })
-    draft.method.update({
-      integrationID: PROVIDER_ID,
-      method: { type: "env", names: [API_KEY_ENV_VAR] },
-    })
-  })
+  // 同名——凭证解析终点是工厂 options.apiKey，优先级 credential > env 由宿主保证。
+  // 与 Kilo CLI 共用同一接线（host/integration.ts）
+  await registerIntegrationAuth(ctx.integration)
 
   // 共享运行时（模型管线 + 伪装状态单例）：注册全部完成后构造——变更回调只会晚于
   // 此刻触发，reload 不会空放。构造时管线按 env/默认列表启动并后台首轮拉取（启动
